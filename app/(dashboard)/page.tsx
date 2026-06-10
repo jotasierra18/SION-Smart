@@ -5,39 +5,37 @@ import { useAuth } from '@/components/auth-provider'
 import { DashboardTabs } from '@/components/dashboard/dashboard-tabs'
 
 export default function DashboardPage() {
-  const { user, loading } = useAuth()
-  const [stats, setStats] = useState<any>(null)
-  const [error, setError] = useState<string | null>(null)
+  const { user } = useAuth()
+  const [data, setData] = useState<any>(null)
+  const [loading, setLoading] = useState(true)
+
+  const isAdmin = user?.app_metadata?.role === 'admin'
 
   useEffect(() => {
-    if (!user) return
+    if (!user || !isAdmin) {
+      setLoading(false)
+      return
+    }
 
     async function loadData() {
-      try {
-        const { getDashboardStats, getClientsWithStats, getClientStats, getOperatorPerformance, getMonthlyStats, getActiveRequest } = await import('@/app/actions/data')
-        const [statsData, clients, clientStats, operatorPerformance, monthlyData, activeRequest] = await Promise.all([
-          getDashboardStats(),
-          getClientsWithStats(),
-          getClientStats(),
-          getOperatorPerformance(),
-          getMonthlyStats(),
-          getActiveRequest(),
-        ])
-        setStats({ stats: statsData, clients, clientStats, operatorPerformance, monthlyData, activeRequest })
-      } catch (e: any) {
-        setError(e.message)
-      }
+      const { getDashboardStats, getClientsWithStats, getClientStats, getOperatorPerformance, getMonthlyStats, getActiveRequest } = await import('@/app/actions/data')
+      const [stats, clients, clientStats, operatorPerformance, monthlyData, activeRequest] = await Promise.all([
+        getDashboardStats(),
+        getClientsWithStats(),
+        getClientStats(),
+        getOperatorPerformance(),
+        getMonthlyStats(),
+        getActiveRequest(),
+      ])
+      setData({ stats, clients, clientStats, operatorPerformance, monthlyData, activeRequest })
+      setLoading(false)
     }
     loadData()
-  }, [user])
+  }, [user, isAdmin])
 
   if (loading) {
-    return <div className="flex items-center justify-center h-64"><div className="animate-pulse text-muted-foreground">Cargando...</div></div>
+    return <div className="flex items-center justify-center h-64"><div className="animate-pulse text-muted-foreground">Cargando datos...</div></div>
   }
-
-  if (!user) return null
-
-  const isAdmin = user.app_metadata?.role === 'admin'
 
   if (!isAdmin) {
     return (
@@ -48,22 +46,16 @@ export default function DashboardPage() {
     )
   }
 
-  if (!stats) {
-    return <div className="flex items-center justify-center h-64"><div className="animate-pulse text-muted-foreground">Cargando datos...</div></div>
-  }
-
-  if (error) {
-    return <div className="text-destructive">Error: {error}</div>
-  }
+  if (!data) return null
 
   return (
     <DashboardTabs
-      stats={stats.stats}
-      clients={stats.clients}
-      clientStats={stats.clientStats}
-      operatorPerformance={stats.operatorPerformance}
-      monthlyData={stats.monthlyData}
-      activeRequest={stats.activeRequest}
+      stats={data.stats}
+      clients={data.clients}
+      clientStats={data.clientStats}
+      operatorPerformance={data.operatorPerformance}
+      monthlyData={data.monthlyData}
+      activeRequest={data.activeRequest}
     />
   )
 }

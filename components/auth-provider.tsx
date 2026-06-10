@@ -2,24 +2,17 @@
 
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
-
-interface AuthUser {
-  id: string
-  email: string
-  app_metadata: Record<string, unknown>
-  user_metadata: Record<string, unknown>
-}
+import { supabaseClient } from '@/lib/auth-client'
+import type { User } from '@supabase/supabase-js'
 
 interface AuthContextType {
-  user: AuthUser | null
-  accessToken: string | null
+  user: User | null
   loading: boolean
   signOut: () => void
 }
 
 const AuthContext = createContext<AuthContextType>({
   user: null,
-  accessToken: null,
   loading: true,
   signOut: () => {},
 })
@@ -28,43 +21,24 @@ export function useAuth() {
   return useContext(AuthContext)
 }
 
-function decodeJwtPayload(token: string): AuthUser | null {
-  try {
-    const parts = token.split('.')
-    if (parts.length !== 3) return null
-    const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')))
-    if (payload.exp && Date.now() >= payload.exp * 1000) return null
-    return {
-      id: payload.sub,
-      email: payload.email,
-      app_metadata: payload.app_metadata || {},
-      user_metadata: payload.user_metadata || {},
-    }
-  } catch {
-    return null
-  }
-}
-
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<AuthUser | null>(null)
-  const [accessToken, setAccessToken] = useState<string | null>(null)
+  const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
   const router = useRouter()
   const pathname = usePathname()
 
   useEffect(() => {
-    const token = localStorage.getItem('sb-access-token')
-    if (token) {
-      const decoded = decodeJwtPayload(token)
-      if (decoded) {
-        setUser(decoded)
-        setAccessToken(token)
-      } else {
-        localStorage.removeItem('sb-access-token')
-        localStorage.removeItem('sb-refresh-token')
-      }
-    }
-    setLoading(false)
+    supabaseClient.auth.getSession().then(({ data: { session } }) => {
+      setUser(session?.user ?? null)
+      setLoading(false)
+    })
+
+    const { data: { subscription } } = supabaseClient.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null)
+      setLoading(false)
+    })
+
+    return () => subscription.unsubscribe()
   }, [])
 
   useEffect(() => {
@@ -78,16 +52,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [user, loading, pathname, router])
 
-  const signOut = () => {
-    localStorage.removeItem('sb-access-token')
-    localStorage.removeItem('sb-refresh-token')
+  const signOut = async () => {
+    await supabaseClient.auth.signOut()
     setUser(null)
-    setAccessToken(null)
     router.replace('/sign-in')
   }
 
   return (
-    <AuthContext.Provider value={{ user, accessToken, loading, signOut }}>
+    <AuthContext.Provider value={{ user, loading, signOut }}>
       {children}
     </AuthContext.Provider>
   )

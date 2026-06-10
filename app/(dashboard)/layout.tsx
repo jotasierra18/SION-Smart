@@ -22,16 +22,13 @@ export default function DashboardLayout({
     return null
   }
 
-  const appMeta = user.app_metadata || {}
-  const userMeta = user.user_metadata || {}
-
   return (
     <div className="min-h-svh bg-white">
       <Sidebar
         user={{
-          name: (userMeta.name as string) || user.email?.split('@')[0] || 'Usuario',
+          name: user.user_metadata?.name || user.email?.split('@')[0] || 'Usuario',
           email: user.email || '',
-          role: (appMeta.role as string) || 'operator',
+          role: user.app_metadata?.role || 'operator',
         }}
       />
       <main className="pl-64 bg-white">

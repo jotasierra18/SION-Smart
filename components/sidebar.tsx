@@ -4,6 +4,7 @@ import Link from 'next/link'
 import Image from 'next/image'
 import { usePathname } from 'next/navigation'
 import { cn } from '@/lib/utils'
+import { useAuth } from '@/components/auth-provider'
 import {
   LayoutDashboard,
   Users,
@@ -39,13 +40,12 @@ interface SidebarProps {
 
 export function Sidebar({ user }: SidebarProps) {
   const pathname = usePathname()
+  const { signOut } = useAuth()
   const [adminOpen, setAdminOpen] = useState(pathname.startsWith('/admin'))
   const isAdmin = user.role === 'admin'
 
-  const handleSignOut = async () => {
-    localStorage.removeItem('sb-access-token')
-    localStorage.removeItem('sb-refresh-token')
-    window.location.href = '/sign-in'
+  const handleSignOut = () => {
+    signOut()
   }
 
   return (

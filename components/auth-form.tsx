@@ -2,6 +2,8 @@
 
 import { useState } from 'react'
 import Image from 'next/image'
+import { useRouter } from 'next/navigation'
+import { supabaseClient } from '@/lib/auth-client'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -12,35 +14,26 @@ export function AuthForm({ mode }: { mode: 'sign-in' }) {
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+  const router = useRouter()
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError(null)
     setLoading(true)
 
-    try {
-      const res = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password }),
-      })
+    const { error: authError } = await supabaseClient.auth.signInWithPassword({
+      email,
+      password,
+    })
 
-      const data = await res.json()
-
-      if (!res.ok) {
-        setLoading(false)
-        setError('Credenciales incorrectas. Verifica tu correo y contrasena.')
-        return
-      }
-
-      localStorage.setItem('sb-access-token', data.access_token)
-      localStorage.setItem('sb-refresh-token', data.refresh_token)
-
-      window.location.href = '/'
-    } catch {
+    if (authError) {
       setLoading(false)
-      setError('Error de conexion. Intenta de nuevo.')
+      setError('Credenciales incorrectas. Verifica tu correo y contrasena.')
+      return
     }
+
+    router.push('/')
+    router.refresh()
   }
 
   return (
