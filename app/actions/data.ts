@@ -1,56 +1,50 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
-import { createServerClient } from '@supabase/ssr'
 import { createClient } from '@supabase/supabase-js'
 import { cookies } from 'next/headers'
 
 async function getSupabaseServerClient() {
   const cookieStore = await cookies()
-  return createServerClient(
+  const accessToken = cookieStore.get('sb-access-token')?.value
+
+  return createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
-      cookies: {
-        getAll() {
-          return cookieStore.getAll()
-        },
-        setAll(cookiesToSet) {
-          try {
-            cookiesToSet.forEach(({ name, value, options }) => {
-              cookieStore.set(name, value, options)
-            })
-          } catch {}
-        },
+      auth: { persistSession: false },
+      global: {
+        headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
       },
     }
   )
 }
 
-export async function signIn(email: string, password: string) {
-  const supabase = await getSupabaseServerClient()
-  const { data, error } = await supabase.auth.signInWithPassword({ email, password })
-  if (error) return { error: error.message }
-  revalidatePath('/', 'layout')
-  return { success: true, user: data.user }
-}
-
 export async function signOut() {
-  const supabase = await getSupabaseServerClient()
-  await supabase.auth.signOut()
+  const cookieStore = await cookies()
+  cookieStore.set('sb-access-token', '', { path: '/', maxAge: 0 })
+  cookieStore.set('sb-refresh-token', '', { path: '/', maxAge: 0 })
   revalidatePath('/', 'layout')
 }
 
 async function getUserId() {
+  const cookieStore = await cookies()
+  const accessToken = cookieStore.get('sb-access-token')?.value
+  if (!accessToken) throw new Error('No autorizado')
+
   const supabase = await getSupabaseServerClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const { data: { user } } = await supabase.auth.getUser(accessToken)
   if (!user) throw new Error('No autorizado')
   return user.id
 }
 
 async function getUserWithRole() {
+  const cookieStore = await cookies()
+  const accessToken = cookieStore.get('sb-access-token')?.value
+  if (!accessToken) throw new Error('No autorizado')
+
   const supabase = await getSupabaseServerClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const { data: { user } } = await supabase.auth.getUser(accessToken)
   if (!user) throw new Error('No autorizado')
   return { id: user.id, role: (user.app_metadata?.role as string) || 'operator' }
 }
@@ -58,12 +52,6 @@ async function getUserWithRole() {
 async function requireAdmin() {
   const { role } = await getUserWithRole()
   if (role !== 'admin') throw new Error('Solo administradores pueden realizar esta accion')
-}
-
-export async function getSession() {
-  const supabase = await getSupabaseServerClient()
-  const { data: { session } } = await supabase.auth.getSession()
-  return session
 }
 
 // Helper to get admin client

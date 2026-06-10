@@ -1,41 +1,40 @@
-import { createServerClient } from '@supabase/ssr'
+import { createClient } from '@supabase/supabase-js'
 import { cookies } from 'next/headers'
 
-export async function createSupabaseServerClient() {
+export async function getSession() {
   const cookieStore = await cookies()
+  const accessToken = cookieStore.get('sb-access-token')?.value
+  const refreshToken = cookieStore.get('sb-refresh-token')?.value
 
-  return createServerClient(
+  if (!accessToken) return null
+
+  const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
-      cookies: {
-        getAll() {
-          return cookieStore.getAll()
-        },
-        setAll(cookiesToSet) {
-          try {
-            cookiesToSet.forEach(({ name, value, options }) => {
-              cookieStore.set(name, value, options)
-            })
-          } catch {
-            // Called from Server Component - ignore
-          }
-        },
-      },
+      auth: { persistSession: false },
+      global: { headers: { Authorization: `Bearer ${accessToken}` } },
     }
   )
-}
 
-export async function getSession() {
-  const supabase = await createSupabaseServerClient()
-  const { data: { session } } = await supabase.auth.getSession()
-  if (!session) return null
-  return { user: session.user, session }
+  const { data: { user }, error } = await supabase.auth.getUser(accessToken)
+
+  if (error || !user) {
+    if (refreshToken) {
+      const { data: refreshData } = await supabase.auth.refreshSession({ refresh_token: refreshToken })
+      if (refreshData.user) {
+        return { user: refreshData.user, session: refreshData.session }
+      }
+    }
+    return null
+  }
+
+  return { user }
 }
 
 export async function getUser() {
-  const session = await getSession()
-  return session?.user ?? null
+  const result = await getSession()
+  return result?.user ?? null
 }
 
 export async function requireAuth() {
@@ -50,4 +49,20 @@ export async function requireAdmin() {
   const role = user.app_metadata?.role as string | undefined
   if (role !== 'admin') throw new Error('Solo administradores pueden realizar esta accion')
   return user
+}
+
+export async function createSupabaseServerClient() {
+  const cookieStore = await cookies()
+  const accessToken = cookieStore.get('sb-access-token')?.value
+
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      auth: { persistSession: false },
+      global: {
+        headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
+      },
+    }
+  )
 }

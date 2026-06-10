@@ -2,7 +2,6 @@
 
 import { useState } from 'react'
 import Image from 'next/image'
-import { signIn } from '@/app/actions/data'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -19,15 +18,26 @@ export function AuthForm({ mode }: { mode: 'sign-in' }) {
     setError(null)
     setLoading(true)
 
-    const result = await signIn(email, password)
+    try {
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+      })
 
-    if (result.error) {
+      const data = await res.json()
+
+      if (!res.ok) {
+        setLoading(false)
+        setError('Credenciales incorrectas. Verifica tu correo y contrasena.')
+        return
+      }
+
+      window.location.href = '/'
+    } catch {
       setLoading(false)
-      setError('Credenciales incorrectas. Verifica tu correo y contrasena.')
-      return
+      setError('Error de conexion. Intenta de nuevo.')
     }
-
-    window.location.href = '/'
   }
 
   return (
