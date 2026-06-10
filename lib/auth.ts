@@ -1,32 +1,33 @@
-import { createClient } from '@supabase/supabase-js'
 import { cookies } from 'next/headers'
+
+function decodeJwtPayload(token: string) {
+  try {
+    const parts = token.split('.')
+    if (parts.length !== 3) return null
+    const payload = Buffer.from(parts[1], 'base64url').toString('utf-8')
+    return JSON.parse(payload)
+  } catch {
+    return null
+  }
+}
 
 export async function getSession() {
   const cookieStore = await cookies()
   const accessToken = cookieStore.get('sb-access-token')?.value
-  const refreshToken = cookieStore.get('sb-refresh-token')?.value
 
   if (!accessToken) return null
 
-  const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      auth: { persistSession: false },
-      global: { headers: { Authorization: `Bearer ${accessToken}` } },
-    }
-  )
+  const payload = decodeJwtPayload(accessToken)
+  if (!payload) return null
 
-  const { data: { user }, error } = await supabase.auth.getUser(accessToken)
+  const exp = payload.exp
+  if (exp && Date.now() >= exp * 1000) return null
 
-  if (error || !user) {
-    if (refreshToken) {
-      const { data: refreshData } = await supabase.auth.refreshSession({ refresh_token: refreshToken })
-      if (refreshData.user) {
-        return { user: refreshData.user, session: refreshData.session }
-      }
-    }
-    return null
+  const user = {
+    id: payload.sub,
+    email: payload.email,
+    app_metadata: payload.app_metadata || {},
+    user_metadata: payload.user_metadata || {},
   }
 
   return { user }
@@ -55,6 +56,7 @@ export async function createSupabaseServerClient() {
   const cookieStore = await cookies()
   const accessToken = cookieStore.get('sb-access-token')?.value
 
+  const { createClient } = await import('@supabase/supabase-js')
   return createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,

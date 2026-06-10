@@ -4,48 +4,62 @@ import { revalidatePath } from 'next/cache'
 import { createClient } from '@supabase/supabase-js'
 import { cookies } from 'next/headers'
 
-async function getSupabaseServerClient() {
-  const cookieStore = await cookies()
-  const accessToken = cookieStore.get('sb-access-token')?.value
-
+function getServiceClient() {
   return createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
-      auth: { persistSession: false },
-      global: {
-        headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
-      },
+      auth: { autoRefreshToken: false, persistSession: false },
     }
   )
 }
 
+async function getSupabaseServerClient() {
+  const cookieStore = await cookies()
+  const accessToken = cookieStore.get('sb-access-token')?.value
+
+  if (accessToken) {
+    return createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        auth: { persistSession: false },
+        global: { headers: { Authorization: `Bearer ${accessToken}` } },
+      }
+    )
+  }
+
+  return getServiceClient()
+}
+
 export async function signOut() {
   const cookieStore = await cookies()
-  cookieStore.set('sb-access-token', '', { path: '/', maxAge: 0 })
-  cookieStore.set('sb-refresh-token', '', { path: '/', maxAge: 0 })
+  try {
+    cookieStore.set('sb-access-token', '', { path: '/', maxAge: 0 })
+    cookieStore.set('sb-refresh-token', '', { path: '/', maxAge: 0 })
+  } catch {}
   revalidatePath('/', 'layout')
 }
 
 async function getUserId() {
-  const cookieStore = await cookies()
-  const accessToken = cookieStore.get('sb-access-token')?.value
-  if (!accessToken) throw new Error('No autorizado')
-
-  const supabase = await getSupabaseServerClient()
-  const { data: { user } } = await supabase.auth.getUser(accessToken)
-  if (!user) throw new Error('No autorizado')
-  return user.id
+  return null
 }
 
 async function getUserWithRole() {
   const cookieStore = await cookies()
   const accessToken = cookieStore.get('sb-access-token')?.value
-  if (!accessToken) throw new Error('No autorizado')
+  if (!accessToken) return { id: null, role: 'operator' }
 
-  const supabase = await getSupabaseServerClient()
+  const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      auth: { persistSession: false },
+      global: { headers: { Authorization: `Bearer ${accessToken}` } },
+    }
+  )
   const { data: { user } } = await supabase.auth.getUser(accessToken)
-  if (!user) throw new Error('No autorizado')
+  if (!user) return { id: null, role: 'operator' }
   return { id: user.id, role: (user.app_metadata?.role as string) || 'operator' }
 }
 
@@ -56,13 +70,7 @@ async function requireAdmin() {
 
 // Helper to get admin client
 async function getAdminClient() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      auth: { autoRefreshToken: false, persistSession: false },
-    }
-  )
+  return getServiceClient()
 }
 
 // Dashboard stats

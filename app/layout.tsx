@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import './globals.css'
+import { AuthProvider } from '@/components/auth-provider'
 
 export const metadata: Metadata = {
   title: 'SION S-MART - Sistema de Gestion de Operaciones',
@@ -31,7 +32,7 @@ export default function RootLayout({
   return (
     <html lang="es" className="light">
       <body className="font-sans antialiased bg-background">
-        {children}
+        <AuthProvider>{children}</AuthProvider>
       </body>
     </html>
   )

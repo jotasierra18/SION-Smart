@@ -16,18 +16,27 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 401 })
   }
 
-  const response = NextResponse.json({ success: true, user: data.user })
+  const response = NextResponse.json({
+    success: true,
+    access_token: data.session.access_token,
+    refresh_token: data.session.refresh_token,
+  })
 
-  const cookieOptions = {
+  response.cookies.set('sb-access-token', data.session.access_token, {
     path: '/',
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax' as const,
+    httpOnly: false,
+    secure: false,
+    sameSite: 'lax',
     maxAge: 60 * 60 * 24 * 7,
-  }
+  })
 
-  response.cookies.set('sb-access-token', data.session.access_token, cookieOptions)
-  response.cookies.set('sb-refresh-token', data.session.refresh_token, cookieOptions)
+  response.cookies.set('sb-refresh-token', data.session.refresh_token, {
+    path: '/',
+    httpOnly: false,
+    secure: false,
+    sameSite: 'lax',
+    maxAge: 60 * 60 * 24 * 7,
+  })
 
   return response
 }

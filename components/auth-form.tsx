@@ -33,6 +33,9 @@ export function AuthForm({ mode }: { mode: 'sign-in' }) {
         return
       }
 
+      localStorage.setItem('sb-access-token', data.access_token)
+      localStorage.setItem('sb-refresh-token', data.refresh_token)
+
       window.location.href = '/'
     } catch {
       setLoading(false)
